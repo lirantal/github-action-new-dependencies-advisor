@@ -8,5 +8,5 @@ inputs:
   token:
     description: GitHub Auth Token for the GitHub API (secrets.GITHUB_TOKEN)
 runs:
-  using: node16
+  using: node20
   main: dist/index.js
