@@ -71,3 +71,7 @@ This project is released under the MIT License.
 Damien Senger <hello@raccoon.studio>
 
 Liran Tal <liran.tal@gmail.com>
+
+## Documentation
+
+- [Project documentation](./docs/README.md) - development, testing, architecture, and conventions.
