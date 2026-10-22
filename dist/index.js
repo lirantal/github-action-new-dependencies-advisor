@@ -30677,6 +30677,31 @@ exports.implementation = EventModifierMixinImpl;
 
 /***/ }),
 
+/***/ 1122:
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * Returns the name of the package installed for a dependency, which differs
+ * from the dependency name for an npm alias (`npm:<package>@<range>`)
+ *
+ * @param dependency Dependency declared in a `package.json` file
+ */
+function resolvePackageName({ name, version }) {
+    if (!version.startsWith('npm:'))
+        return name;
+    // starts the search after the first character, the `@` of a scoped package
+    const spec = version.slice('npm:'.length);
+    const rangeIndex = spec.indexOf('@', 1);
+    return rangeIndex === -1 ? spec : spec.slice(0, rangeIndex);
+}
+exports.default = resolvePackageName;
+
+
+/***/ }),
+
 /***/ 1155:
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -54284,23 +54309,29 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const github_sdk_1 = __importDefault(__webpack_require__(2908));
 const getLocalPackageInfo_1 = __importDefault(__webpack_require__(955));
+const resolvePackageName_1 = __importDefault(__webpack_require__(1122));
+// keeps the version, which holds the real package name of an npm alias
+const listDependencies = (dependencies) => Object.keys(dependencies).map(name => ({ name, version: dependencies[name] }));
 function analysePackage(file) {
     return __awaiter(this, void 0, void 0, function* () {
         const ghClient = github_sdk_1.default.getClient();
         // fetches information about the package in the base branch
         const baseBranch = yield ghClient.getBaseBranch();
         const basePackage = yield ghClient.getPackage(file, baseBranch);
-        const baseDeps = basePackage ? Object.keys(basePackage.dependencies) : [];
+        const baseDeps = basePackage
+            ? listDependencies(basePackage.dependencies).map(resolvePackageName_1.default)
+            : [];
         const baseDevDeps = basePackage
-            ? Object.keys(basePackage.devDependencies)
+            ? listDependencies(basePackage.devDependencies).map(resolvePackageName_1.default)
             : [];
         // fetches information about the updated package file
         const updatedPackage = yield getLocalPackageInfo_1.default(file);
-        const updatedDeps = Object.keys(updatedPackage.dependencies);
-        const updatedDevDeps = Object.keys(updatedPackage.devDependencies);
-        // filters new dependencies not existing in the base branch
-        const newDeps = updatedDeps.filter(dep => !baseDeps.includes(dep));
-        const newDevDeps = updatedDevDeps.filter(dep => !baseDevDeps.includes(dep));
+        const updatedDeps = listDependencies(updatedPackage.dependencies);
+        const updatedDevDeps = listDependencies(updatedPackage.devDependencies);
+        // filters new packages not existing in the base branch, whatever the name
+        // of the dependency installing them
+        const newDeps = updatedDeps.filter(dep => !baseDeps.includes(resolvePackageName_1.default(dep)));
+        const newDevDeps = updatedDevDeps.filter(dep => !baseDevDeps.includes(resolvePackageName_1.default(dep)));
         return {
             dependencies: newDeps,
             devDependencies: newDevDeps
@@ -171766,6 +171797,7 @@ const core_1 = __webpack_require__(6470);
 const fp_1 = __webpack_require__(5377);
 const package_json_1 = __importDefault(__webpack_require__(6289));
 const comment_1 = __webpack_require__(2374);
+const resolvePackageName_1 = __importDefault(__webpack_require__(1122));
 const advisorPackageMetadata_1 = __webpack_require__(5923);
 function draftMessage(newDependencies) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -171778,20 +171810,31 @@ function draftMessage(newDependencies) {
         const info = {};
         const advisorScorePicture = {};
         for (const dependency of listDependencies) {
+            const packageName = resolvePackageName_1.default(dependency);
             try {
-                info[dependency] = yield package_json_1.default(dependency, { fullMetadata: true });
-                advisorScorePicture[dependency] = yield advisorPackageMetadata_1.getAdvisorPackageScore(dependency);
+                info[packageName] = yield package_json_1.default(packageName, { fullMetadata: true });
+                advisorScorePicture[packageName] = yield advisorPackageMetadata_1.getAdvisorPackageScore(packageName);
             }
             catch (error) {
-                core_1.debug(`Package not found: ${dependency}`);
+                core_1.debug(`Package not found: ${packageName}`);
             }
         }
-        const messageInfo = (dep) => {
+        const messageInfo = (dependency) => {
             var _a, _b, _c, _d, _e;
+            const dep = resolvePackageName_1.default(dependency);
+            const title = dep === dependency.name ? dep : `${dependency.name} (npm:${dep})`;
+            // lists the dependency without metadata if the package lookup failed
+            if (!info[dep]) {
+                return `
+### ${title}\n
+
+No package metadata found on the npm registry.
+    `;
+            }
             return `
 ### ${info[dep].homepage
-                ? `[${info[dep].name}](https://snyk.io/advisor/npm-package/${encodeURIComponent(info[dep].name)})`
-                : info[dep].name}\n
+                ? `[${title}](https://snyk.io/advisor/npm-package/${encodeURIComponent(info[dep].name)})`
+                : title}\n
 
 <table>
   ${info[dep].description

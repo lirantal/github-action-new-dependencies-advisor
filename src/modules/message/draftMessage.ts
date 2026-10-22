@@ -2,7 +2,8 @@ import {debug} from '@actions/core'
 import {compact} from 'lodash/fp'
 import packageJson, {FullMetadata} from 'package-json'
 import {COMMENT_IDENTIFIER} from '../../config/comment'
-import {DependenciesList} from '../../types/package'
+import {DependenciesList, Dependency} from '../../types/package'
+import resolvePackageName from '../packages/resolvePackageName'
 import {getAdvisorPackageScore} from './advisorPackageMetadata'
 
 interface advisorScorePictures {
@@ -22,24 +23,38 @@ async function draftMessage(
   const info: Record<string, FullMetadata> = {}
   const advisorScorePicture: advisorScorePictures = {}
   for (const dependency of listDependencies) {
+    const packageName = resolvePackageName(dependency)
     try {
-      info[dependency] = await packageJson(dependency, {fullMetadata: true})
-      advisorScorePicture[dependency] = await getAdvisorPackageScore(dependency)
+      info[packageName] = await packageJson(packageName, {fullMetadata: true})
+      advisorScorePicture[packageName] = await getAdvisorPackageScore(
+        packageName
+      )
     } catch (error) {
-      debug(`Package not found: ${dependency}`)
+      debug(`Package not found: ${packageName}`)
     }
   }
 
-  const messageInfo = (dep: string): string =>
+  const messageInfo = (dependency: Dependency): string => {
+    const dep = resolvePackageName(dependency)
+    const title =
+      dep === dependency.name ? dep : `${dependency.name} (npm:${dep})`
+
+    // lists the dependency without metadata if the package lookup failed
+    if (!info[dep]) {
+      return `
+### ${title}\n
+
+No package metadata found on the npm registry.
     `
+    }
+
+    return `
 ### ${
       info[dep].homepage
-        ? `[${
-            info[dep].name
-          }](https://snyk.io/advisor/npm-package/${encodeURIComponent(
+        ? `[${title}](https://snyk.io/advisor/npm-package/${encodeURIComponent(
             info[dep].name
           )})`
-        : info[dep].name
+        : title
     }\n
 
 <table>
@@ -89,6 +104,7 @@ ${
     : ``
 }
     `
+  }
 
   const dependenciesMessage = `
 ## New dependencies

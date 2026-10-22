@@ -17,6 +17,9 @@ making sure that you are not missing the addition of new package in your npm pro
 
 To highlight new packages, this action compares the list of dependencies 
 present in the current pull request branch with the ones present in the base branch.
+An npm alias (`"name": "npm:<package>@<range>"`) is compared by the package it
+installs: renaming a dependency does not report it, but pointing an existing
+dependency to another package does.
 
 This check only occurs for each `package.json` file added or updated with the
 current pull request. This action is not only looking at the root-level `package.json` but potentially

@@ -6,7 +6,14 @@ export interface Package {
   devDependencies: Record<string, string>
 }
 
+export interface Dependency {
+  /** Name of the dependency in the `package.json` file */
+  name: string
+  /** Version specifier, `npm:<package>@<range>` for an npm alias */
+  version: string
+}
+
 export interface DependenciesList {
-  dependencies: string[]
-  devDependencies: string[]
+  dependencies: Dependency[]
+  devDependencies: Dependency[]
 }
